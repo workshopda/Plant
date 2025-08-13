@@ -1,11 +1,10 @@
-﻿# === Advanced Plant Disease Diagnosis with Enhanced Accuracy ===
 
+# === Advanced Plant Disease Diagnosis with Enhanced Accuracy ===
 
 # Install required packages
 !pip install -q opencv-python-headless pillow numpy matplotlib
 !pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 !pip install -q transformers gradio scikit-learn
-
 
 import io
 import cv2
@@ -18,9 +17,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import warnings
 warnings.filterwarnings('ignore')
 
-
 # --- Utility Functions ---
-
 
 def variance_of_laplacian(image):
     """Measure focus quality."""
@@ -34,12 +31,10 @@ def variance_of_laplacian(image):
     except Exception:
         return 50.0  # Default reasonable focus score
 
-
 def exposure_score(bgr_image):
     """Measure brightness."""
     gray = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
     return float(np.mean(gray)), float(np.std(gray))
-
 
 def gray_world_cc(image_bgr):
     """Apply white balance correction."""
@@ -50,32 +45,31 @@ def gray_world_cc(image_bgr):
             img[:, :, i] *= scale
     return np.clip(img, 0, 255).astype(np.uint8)
 
-
 def detect_plant_content(pil_img):
     """Enhanced plant/leaf content detection using color analysis and edge detection."""
     try:
         bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        
+
         # Multiple green ranges to catch different types of vegetation
         green_ranges = [
             ([25, 30, 30], [85, 255, 255]),    # Primary green range
             ([35, 20, 20], [95, 255, 255]),    # Extended green range
             ([15, 25, 25], [100, 255, 255])   # Broader range for yellowing/browning leaves
         ]
-        
+
         total_green_pixels = 0
         total_pixels = bgr.shape[0] * bgr.shape[1]
-        
+
         for lower, upper in green_ranges:
             mask = cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
             # Ensure mask is single channel
             if len(mask.shape) > 2:
                 mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
             total_green_pixels += cv2.countNonZero(mask)
-        
+
         green_ratio = min(total_green_pixels / total_pixels, 1.0)
-        
+
         # Check for leaf-like textures using edge detection
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150)
@@ -83,19 +77,17 @@ def detect_plant_content(pil_img):
         if len(edges.shape) > 2:
             edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
         edge_density = cv2.countNonZero(edges) / total_pixels
-        
+
         # Enhanced detection criteria
         is_plant = (green_ratio > 0.1 and edge_density > 0.02) or green_ratio > 0.15
-        
+
         return is_plant, green_ratio, edge_density
-    
+
     except Exception as e:
         # Fallback: assume it might be a plant if we can't analyze properly
         return True, 0.1, 0.02
 
-
 # --- Enhanced Disease Labels & Recognition ---
-
 
 # Comprehensive disease database with scientific names and detailed symptoms
 disease_database = {
@@ -233,41 +225,32 @@ disease_database = {
     }
 }
 
-
 # Create comprehensive label lists
 labels = list(disease_database.keys())
 all_prompts = []
 prompt_to_label = {}
-
 
 for label, data in disease_database.items():
     for prompt in data["prompts"]:
         all_prompts.append(prompt)
         prompt_to_label[prompt] = label
 
-
 # --- Load Enhanced Model ---
 
-
 print("Loading enhanced CLIP model for plant disease recognition...")
-
 
 # Use more capable CLIP model for better accuracy
 model_name = "openai/clip-vit-base-patch32"
 model = CLIPModel.from_pretrained(model_name)
 processor = CLIPProcessor.from_pretrained(model_name)
 
-
 device = "cpu"  # CPU optimized
 model = model.to(device)
 model.eval()  # Set to evaluation mode
 
-
 print(f"Model loaded successfully on {device}")
 
-
 # --- Comprehensive Treatment Database ---
-
 
 TREATMENTS = {
     "healthy_leaf": {
@@ -292,7 +275,7 @@ TREATMENTS = {
         ],
         "timeline": "Maintain current care routine"
     },
-    
+
     "powdery_mildew": {
         "description": "Fungal disease creating white powdery coating on leaves. Thrives in humid conditions with poor air circulation.",
         "severity": "Moderate",
@@ -321,7 +304,7 @@ TREATMENTS = {
         ],
         "timeline": "Treatment should show results in 7-14 days"
     },
-    
+
     "leaf_rust": {
         "description": "Fungal disease causing orange-red pustules. Spreads rapidly in warm, moist conditions.",
         "severity": "Moderate to High",
@@ -350,7 +333,7 @@ TREATMENTS = {
         ],
         "timeline": "Early treatment crucial - 10-21 days for control"
     },
-    
+
     "leaf_scorch": {
         "description": "Environmental stress causing brown, crispy leaf edges. Often due to water stress, heat, or wind damage.",
         "severity": "Low to Moderate",
@@ -374,7 +357,7 @@ TREATMENTS = {
         ],
         "timeline": "Recovery depends on addressing underlying cause"
     },
-    
+
     "bacterial_spot": {
         "description": "Bacterial infection causing dark, water-soaked spots with yellow halos. Highly contagious.",
         "severity": "High",
@@ -403,7 +386,7 @@ TREATMENTS = {
         ],
         "timeline": "Aggressive treatment needed - 14-28 days"
     },
-    
+
     "downy_mildew": {
         "description": "Oomycete pathogen causing yellow patches with fuzzy gray growth underneath leaves.",
         "severity": "High",
@@ -431,7 +414,7 @@ TREATMENTS = {
         ],
         "timeline": "Quick action essential - 7-14 days for control"
     },
-    
+
     "black_spot": {
         "description": "Fungal disease common on roses, causing circular black spots with yellow halos.",
         "severity": "Moderate",
@@ -455,7 +438,7 @@ TREATMENTS = {
         ],
         "timeline": "10-21 days with consistent treatment"
     },
-    
+
     "anthracnose": {
         "description": "Fungal disease causing sunken, irregular brown spots, often with pink spore masses.",
         "severity": "Moderate to High",
@@ -479,7 +462,7 @@ TREATMENTS = {
         ],
         "timeline": "14-28 days for control, sanitation crucial"
     },
-    
+
     "aphid_damage": {
         "description": "Soft-bodied insects that suck plant sap, causing curling, yellowing, and stunted growth.",
         "severity": "Low to Moderate",
@@ -508,7 +491,7 @@ TREATMENTS = {
         ],
         "timeline": "3-7 days for population control"
     },
-    
+
     "spider_mite_damage": {
         "description": "Microscopic pests causing stippling, bronzing, and fine webbing on leaves.",
         "severity": "Moderate",
@@ -537,7 +520,7 @@ TREATMENTS = {
         ],
         "timeline": "10-14 days with consistent treatment"
     },
-    
+
     "thrip_damage": {
         "common_name": "Thrip Damage",
         "description": "Tiny insects that rasp leaf surfaces, causing silver streaks and black specks.",
@@ -562,7 +545,7 @@ TREATMENTS = {
         ],
         "timeline": "7-14 days for control"
     },
-    
+
     "nutrient_deficiency": {
         "description": "Inadequate nutrition causing various symptoms like chlorosis, purpling, or stunted growth.",
         "severity": "Low to Moderate",
@@ -589,9 +572,7 @@ TREATMENTS = {
     }
 }
 
-
 # --- Enhanced Image Processing ---
-
 
 def load_image(img):
     """Load image from various input types."""
@@ -604,16 +585,15 @@ def load_image(img):
     else:
         return Image.open(io.BytesIO(img)).convert("RGB")
 
-
 def advanced_leaf_segmentation(pil_img):
     """Advanced leaf segmentation with multiple approaches."""
     try:
         bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         original_shape = bgr.shape[:2]
-        
+
         # Method 1: Enhanced HSV color segmentation
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        
+
         # Multiple green ranges for different leaf conditions
         green_ranges = [
             ([25, 40, 40], [85, 255, 255]),    # Healthy green
@@ -621,7 +601,7 @@ def advanced_leaf_segmentation(pil_img):
             ([5, 30, 30], [35, 255, 255]),     # Yellow (diseased)
             ([85, 40, 40], [100, 255, 255])    # Blue-green
         ]
-        
+
         combined_mask = np.zeros(original_shape, dtype=np.uint8)
         for lower, upper in green_ranges:
             mask = cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
@@ -629,7 +609,7 @@ def advanced_leaf_segmentation(pil_img):
             if len(mask.shape) > 2:
                 mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
             combined_mask = cv2.bitwise_or(combined_mask, mask)
-        
+
         # Method 2: Brown/diseased tissue detection
         brown_lower = np.array([8, 50, 20], dtype=np.uint8)
         brown_upper = np.array([25, 255, 200], dtype=np.uint8)
@@ -638,77 +618,76 @@ def advanced_leaf_segmentation(pil_img):
         if len(brown_mask.shape) > 2:
             brown_mask = cv2.cvtColor(brown_mask, cv2.COLOR_BGR2GRAY)
         combined_mask = cv2.bitwise_or(combined_mask, brown_mask)
-        
+
         # Morphological operations
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
         combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
         combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
-        
+
         # Find the largest contour (main leaf)
         contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+
         if contours:
             # Find largest contour by area
             largest_contour = max(contours, key=cv2.contourArea)
             area_ratio = cv2.contourArea(largest_contour) / (original_shape[0] * original_shape[1])
-            
+
             # Only proceed if we found a reasonably sized leaf
             if area_ratio > 0.05:  # At least 5% of image
                 x, y, w, h = cv2.boundingRect(largest_contour)
-                
+
                 # Add smart padding
                 pad_x = int(0.1 * w)
                 pad_y = int(0.1 * h)
-                
+
                 x0 = max(0, x - pad_x)
                 y0 = max(0, y - pad_y)
                 x1 = min(bgr.shape[1], x + w + pad_x)
                 y1 = min(bgr.shape[0], y + h + pad_y)
-                
+
                 cropped = pil_img.crop((x0, y0, x1, y1))
                 return cropped, True
-        
+
         # If segmentation failed, return original
         return pil_img, False
-        
+
     except Exception as e:
         # If any error occurs, return original image
         return pil_img, False
 
-
 def enhanced_predict(pil_img):
     """Enhanced prediction with multi-stage analysis."""
-    
+
     # Stage 1: Preprocess with multiple augmentations for robustness
     predictions = []
-    
+
     # Original image
     inputs = processor(text=all_prompts, images=pil_img, return_tensors="pt", padding=True)
     inputs = {k: v.to(device) for k, v in inputs.items()}
-    
+
     with torch.no_grad():
         outputs = model(**inputs)
         logits = outputs.logits_per_image[0]
         probs = torch.softmax(logits, dim=-1).cpu().numpy()
         predictions.append(probs)
-    
+
     # Stage 2: Color-balanced version
     bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     balanced_bgr = gray_world_cc(bgr)
     balanced_img = Image.fromarray(cv2.cvtColor(balanced_bgr, cv2.COLOR_BGR2RGB))
-    
+
     inputs_balanced = processor(text=all_prompts, images=balanced_img, return_tensors="pt", padding=True)
     inputs_balanced = {k: v.to(device) for k, v in inputs_balanced.items()}
-    
+
     with torch.no_grad():
         outputs_balanced = model(**inputs_balanced)
         logits_balanced = outputs_balanced.logits_per_image[0]
         probs_balanced = torch.softmax(logits_balanced, dim=-1).cpu().numpy()
         predictions.append(probs_balanced)
-    
+
     # Average predictions for robustness
     avg_probs = np.mean(predictions, axis=0)
-    
+
     # Group probabilities by disease label
     label_probs = {}
     for i, prompt in enumerate(all_prompts):
@@ -716,80 +695,76 @@ def enhanced_predict(pil_img):
         if label not in label_probs:
             label_probs[label] = []
         label_probs[label].append(avg_probs[i])
-    
+
     # Take maximum probability within each group
     final_probs = {}
     for label, probs_list in label_probs.items():
         final_probs[label] = max(probs_list)
-    
+
     # Normalize probabilities
     total_prob = sum(final_probs.values())
     if total_prob > 0:
         for label in final_probs:
             final_probs[label] /= total_prob
-    
-    return final_probs
 
+    return final_probs
 
 # --- Main Analysis Function ---
 
-
 def analyze_plant_disease(image_input):
     """Comprehensive plant disease analysis with validation."""
-    
+
     try:
         if image_input is None:
             return None, "❌ **Please upload an image to analyze.**"
-        
+
         # Load and validate image
         pil_img = load_image(image_input)
-        
+
         # Check basic image quality
         bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         brightness, contrast = exposure_score(bgr)
         focus_score = variance_of_laplacian(bgr)
-        
+
         # Image quality checks
         if brightness < 30:
             return None, "⚠️ **Image is too dark.** Please capture in better lighting conditions."
-        
+
         if brightness > 240:
             return None, "⚠️ **Image is overexposed.** Please reduce lighting or avoid flash."
-            
+
         if focus_score < 10:
             return None, "⚠️ **Image is too blurry.** Please hold camera steady and ensure proper focus."
-        
+
         # Plant content validation
         is_plant, green_ratio, edge_density = detect_plant_content(pil_img)
-        
+
         if not is_plant:
             return None, f"""❌ **No plant or leaf detected in the image.**
-            
+
 **Please ensure your image contains:**
 - 🌿 A clear view of plant leaves
 - 🌱 Sufficient plant material (not just stems or flowers)
 - 📸 Good lighting showing leaf details
 - 🎯 Focus on the affected area if disease is suspected
 
-
 **Current image analysis:**
 - Green content: {green_ratio:.1%}
 - Edge detail: {'Sufficient' if edge_density > 0.02 else 'Insufficient'}
-
 
 **Tips for better results:**
 - Fill the frame with leaves
 - Capture both healthy and affected areas
 - Use natural lighting when possible
 - Avoid heavy shadows or glare"""
-        
+
         # Advanced leaf segmentation
         cropped_img, segmentation_success = advanced_leaf_segmentation(pil_img)
-        
+
         # Apply additional image enhancement
         bgr = cv2.cvtColor(np.array(cropped_img), cv2.COLOR_RGB2BGR)
         enhanced_bgr = gray_world_cc(bgr)
-        
+
         # Slight sharpening for better feature detection (safer approach)
         try:
             kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]], dtype=np.float32)
@@ -799,21 +774,20 @@ def analyze_plant_disease(image_input):
         except Exception:
             # If sharpening fails, use original enhanced image
             pass
-        
+
         processed_img = Image.fromarray(cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB))
-        
+
         # Enhanced disease prediction
         disease_probs = enhanced_predict(processed_img)
-        
+
         # Get top predictions
         sorted_diseases = sorted(disease_probs.items(), key=lambda x: x[1], reverse=True)
         top_disease = sorted_diseases[0]
         top_label, top_confidence = top_disease
-        
+
         # Confidence thresholds for reliability
         if top_confidence < 0.25:
             return processed_img, f"""⚠️ **Low confidence in diagnosis** ({top_confidence*100:.1f}%)
-
 
 **Possible reasons:**
 - Image quality may not be sufficient
@@ -821,73 +795,58 @@ def analyze_plant_disease(image_input):
 - Multiple conditions present
 - Uncommon disease not in training data
 
-
 **Recommendations:**
 - Try capturing a clearer, closer image
 - Include both affected and healthy leaf areas
 - Ensure good lighting without shadows
 - Consider consulting a local plant pathologist
 
-
 **Most likely conditions detected:**
 {chr(10).join([f'- {disease_database[label]["common_name"]}: {prob*100:.1f}%' for label, prob in sorted_diseases[:3]])}"""
-
 
         # Get disease information
         disease_info = disease_database[top_label]
         treatment_info = TREATMENTS[top_label]
-        
+
         # Generate comprehensive analysis report
         confidence_level = "High" if top_confidence > 0.7 else "Medium" if top_confidence > 0.5 else "Low"
-        
+
         result = f"""# 🌿 **Plant Disease Analysis Report**
 
-
 ## 📋 **Primary Diagnosis**
-**Disease:** {disease_info['common_name']}  
-**Scientific Name:** {disease_info['scientific_name']}  
-**Confidence:** {top_confidence*100:.1f}% ({confidence_level})  
+**Disease:** {disease_info['common_name']}
+**Scientific Name:** {disease_info['scientific_name']}
+**Confidence:** {top_confidence*100:.1f}% ({confidence_level})
 **Severity Level:** {treatment_info['severity']}
-
 
 ## 🔍 **Disease Description**
 {treatment_info['description']}
 
-
 ## 🚨 **Key Symptoms to Look For:**
 {chr(10).join([f'• {symptom}' for symptom in disease_info['symptoms']])}
-
 
 ## ⚡ **Immediate Action Required:**
 {chr(10).join([f'• {action}' for action in treatment_info['immediate_actions']])}
 
-
 ## 🌱 **Treatment Options**
-
 
 ### 🥬 **Organic/Natural Solutions:**
 {chr(10).join([f'• {solution}' for solution in treatment_info['organic_solutions']])}"""
-
 
         # Add specific treatment options if available
         if 'treatment_options' in treatment_info:
             for category, treatments in treatment_info['treatment_options'].items():
                 result += f"""
 
-
 ### 🧪 **{category.title()} Treatments:**
 {chr(10).join([f'• {treatment}' for treatment in treatments])}"""
 
-
         result += f"""
-
 
 ## ⏱️ **Expected Timeline:**
 {treatment_info['timeline']}
 
-
 ## 📊 **Alternative Possibilities:**"""
-
 
         # Show top 3 alternative diagnoses
         for i, (label, prob) in enumerate(sorted_diseases[1:4], 1):
@@ -895,18 +854,15 @@ def analyze_plant_disease(image_input):
             result += f"""
 **{i}. {alt_disease['common_name']}** ({prob*100:.1f}% confidence)"""
 
-
         result += f"""
-
 
 ## 🛡️ **Prevention for Future:**
 • Maintain good air circulation around plants
-• Water at soil level to avoid wetting foliage  
+• Water at soil level to avoid wetting foliage
 • Practice proper plant spacing
 • Remove plant debris regularly
 • Monitor plants weekly for early signs
 • Use disease-resistant varieties when possible
-
 
 ## ⚠️ **Important Notes:**
 - This analysis is for educational purposes only
@@ -915,20 +871,16 @@ def analyze_plant_disease(image_input):
 - Follow all product label instructions carefully
 - Consider integrated pest management approaches
 
-
 **Image Quality Assessment:**
 - Focus: {'Excellent' if focus_score > 50 else 'Good' if focus_score > 25 else 'Fair'}
 - Lighting: {'Optimal' if 80 < brightness < 180 else 'Acceptable' if 50 < brightness < 220 else 'Suboptimal'}
 - Plant Content: {green_ratio:.1%} of image
 - Segmentation: {'Successful' if segmentation_success else 'Used full image'}"""
 
-
         return processed_img, result
-
 
     except Exception as e:
         return None, f"""❌ **Error during analysis:** {str(e)}
-
 
 **Possible solutions:**
 - Check image file format (JPG, PNG supported)
@@ -936,23 +888,19 @@ def analyze_plant_disease(image_input):
 - Try a different image
 - Make sure image contains plant material
 
-
 **If problem persists, try:**
 - Reducing image size
 - Using better lighting
 - Capturing a clearer image"""
 
-
 # === Advanced Plant Disease Diagnosis with Enhanced Accuracy ===
 
-
 # [Previous code remains exactly the same until the Gradio Interface section]
-
 
 # Gradeo interface
 def create_interface():
     """Create the Gradio interface for plant disease diagnosis with high contrast theme."""
-    
+
     with gr.Blocks(
         title="🌿 Plant Pathology AI Assistant",
         theme=gr.themes.Base(
@@ -1052,7 +1000,7 @@ def create_interface():
         }
         """
     ) as interface:
-        
+
         # Header
         gr.HTML("""
         <div class="main-header">
@@ -1060,7 +1008,7 @@ def create_interface():
             <p style="margin: 0; opacity: 0.9;">Educational tool for plant disease identification and management</p>
         </div>
         """)
-        
+
         # Main interface
         with gr.Row():
             with gr.Column(scale=1):
@@ -1073,13 +1021,13 @@ def create_interface():
                         elem_classes="hide-buttons"
                     )
                     gr.HTML('</div>')
-                
+
                 analyze_btn = gr.Button(
                     "Analyze Plant Sample",
                     variant="primary",
                     size="lg"
                 )
-                
+
                 gr.HTML("""
                 <div class="tips-box">
                     <h4 style="margin-top: 0; color: #10B981;">Laboratory Submission Guidelines</h4>
@@ -1092,7 +1040,7 @@ def create_interface():
                     </ul>
                 </div>
                 """)
-                
+
             with gr.Column(scale=1):
                 with gr.Group():
                     processed_image = gr.Image(
@@ -1100,14 +1048,14 @@ def create_interface():
                         height=300,
                         elem_classes="processed-image"
                     )
-                
+
                 with gr.Group():
                     analysis_output = gr.Markdown(
                         label="Pathology Report",
                         value="### Plant Health Diagnostic Report\n\nSubmit a sample image to generate analysis...",
                         elem_classes="diagnosis-card"
                     )
-        
+
         # Event handlers
         analyze_btn.click(
             fn=analyze_plant_disease,
@@ -1115,7 +1063,7 @@ def create_interface():
             outputs=[processed_image, analysis_output],
             api_name="analyze_disease"
         )
-        
+
         # Footer information
         gr.HTML("""
         <div class="footer">
@@ -1128,7 +1076,7 @@ def create_interface():
                 <p>• Nutritional deficiencies (NPK, Micronutrients)</p>
                 <p>• Healthy tissue assessment</p>
             </div>
-            
+
             <div style="margin-top: 1.5rem; display: flex; justify-content: space-between; flex-wrap: wrap;">
                 <div style="margin-bottom: 0.5rem;">
                     <strong style="color: #10B981;">Educational Note:</strong>
@@ -1141,22 +1089,20 @@ def create_interface():
             </div>
         </div>
         """)
-        
+
     return interface
 
-
 # --- Launch Application ---
-
 
 if __name__ == "__main__":
     print("🚀 Starting Plant Pathology AI Assistant...")
     print("📊 Pathology Database: 12 conditions with management protocols")
     print("🤖 AI Model: CLIP with multi-modal analysis")
     print("🎓 Educational Focus: Student-friendly interface")
-    
+
     # Create and launch interface
     app = create_interface()
-    
+
     # Launch with queue for better performance
     app.queue(max_size=20).launch(
         debug=False,
